@@ -5,7 +5,8 @@ import os
 import optparse
 import re
 import scipy
-from scipy import mat, zeros, shape, linalg, diag, dot, random
+import scipy.linalg
+from scipy import mat, zeros, shape, diag, dot, random
 from math import log
 import time
 from eval import Evaluator
@@ -85,7 +86,10 @@ if __name__ == '__main__':
                       dest='num_words', type=int, default=5000,
                       help='number of words to extract')
     parser.add_option('-m', '--method', metavar='METHOD',
-                      dest='method', type=str, default='svd',
+                      dest='method', type=str, default='svd,kmeans',
+                      help='number of words to extract')
+    parser.add_option('-o', '--output', metavar='OUTPUT',
+                      dest='output', type=str, default=None,
                       help='number of words to extract')
     parser.add_option('-d', '--dimension', metavar='DIMENSION',
                       dest='dimension', type=int, default=2000,
@@ -104,6 +108,8 @@ if __name__ == '__main__':
                       help='turn on verbose message output')
     (options, args) = parser.parse_args()
     (catfile,dir) = tuple(args[0:2])
+    options.method = options.method.split(',')
+    options.method = dict(zip(options.method, options.method))
     if options.verbose:
         print options, catfile, dir
     
@@ -114,9 +120,9 @@ if __name__ == '__main__':
 
     eval = Evaluator(open(catfile), options.encoding)
 
-    if options.method == 'svd':
+    if 'svd' in options.method:
         # dimensionality reduction by svd
-        (U,s,Vh) = linalg.svd(docvectors,full_matrices=False)
+        (U,s,Vh) = scipy.linalg.svd(docvectors,full_matrices=False)
         #print shape(U),shape(s),shape(Vh)
         #print [x for x in docvectors[1]]
         docvectors = dot(U[:,:options.dimension], diag(s[:options.dimension]))
@@ -124,13 +130,11 @@ if __name__ == '__main__':
         #print [x for x in docvectors[1]]
         if options.verbose:
             print [x for x in s]
-    elif options.method == 'spectral':
-        pass
     #TODO: compare to random indexing
     
     memberships = [x*options.clusters/len(docvectors) for x in range(0,len(docvectors))]
     random.shuffle(memberships)
-    centroids = zeros((options.clusters, options.dimension), float)
+    centroids = zeros((options.clusters, docvectors.shape[1]), float)
     members = zeros(len(centroids), int)
     for (i,m) in enumerate(memberships):
         centroids[m] += docvectors[i]
@@ -144,11 +148,23 @@ if __name__ == '__main__':
     print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
     print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
 
-    memberships,centroids = kmeans(docvectors, initial=centroids, distance=lambda x,y: linalg.norm(x-y,2), threshold=options.precision, verbose=options.verbose)
-    print ' result centroids: \n', centroids
-    print ' result memberships: \n', memberships
+    if 'kmeans' in options.method:
+        memberships,centroids = kmeans(docvectors, initial=centroids, distance=lambda x,y: scipy.linalg.norm(x-y,2), threshold=options.precision, verbose=options.verbose)
+        if options.verbose:
+            print ' result centroids: \n', centroids
+        if options.output:
+            file = open(options.output, 'w')
+            for (doc,cluster) in zip(docids,memberships):
+                print >> file, doc, cluster
+        else:
+            print ' result memberships: \n', memberships
 
-    print '     purity: ', eval.purity(zip(docids,memberships))
-    print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
-    print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
-    print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
+        print '%d/%d' % (len(eval.evaluated_docs(zip(docids,memberships))), len(memberships))
+        print '     purity: ', eval.purity(zip(docids,memberships))
+        print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
+        print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
+        print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
+
+    if 'spectral' in options.method:
+        pass
+        
