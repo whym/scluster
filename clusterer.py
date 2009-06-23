@@ -8,29 +8,7 @@ import scipy
 from scipy import mat, zeros, shape, linalg, diag, dot, random
 from math import log
 import time
-
-def purity(memberships, references, macro=True, verbose=False):
-    clusters = {}
-    avg = 0.0
-    for (i,x) in memberships:
-        if x in clusters:
-            clusters[x].append(i)
-        else:
-            clusters[x] = [i]
-    for docs in clusters.values():
-        m = sorted(reduce(lambda s,x: s+x, [references[x] for x in docs]))
-        count = len(filter(lambda x: x==m[0], m))
-        val = float(count)/float(len(docs))
-        if verbose:
-            print '#', val, count, len(docs)
-        if macro:
-            avg += val*len(docs)
-        else:
-            avg += val
-    if macro:
-        return avg / len(memberships)
-    else:
-        return avg / len(clusters)
+from eval import Evaluator
 
 def kmeans(vectors, distance, initial, threshold=1.0E-6, iterations=1000, verbose=False):
     centroids = initial
@@ -63,7 +41,7 @@ def kmeans(vectors, distance, initial, threshold=1.0E-6, iterations=1000, verbos
     
     return memberships, centroids
 
-def docs2vectors_tfidf(dir, vocsize, wpat=re.compile(r'.*')):
+def docs2vectors_tfidf(dir, vocsize, verbose=False):
     words = {}
     
     tf = []
@@ -71,12 +49,9 @@ def docs2vectors_tfidf(dir, vocsize, wpat=re.compile(r'.*')):
     docs = os.listdir(dir)
     for file in docs:
         freq = {}
+        print 'reading', file
         for line in open(dir + '/' + file):
             for w in re.split(r'\s+', line.strip()):
-                x = wpat.match(w)
-                if x != None:
-                    w = x[1]
-                
                 if w not in words:
                     words[w] = 1
                 else:
@@ -132,25 +107,12 @@ if __name__ == '__main__':
     if options.verbose:
         print options, catfile, dir
     
-    # obtain document vectors
-    (docvectors,docids) = docs2vectors_tfidf(dir, options.num_words, re.compile(r'/(.*)'))
+    random.seed(options.seed)
 
-    doc2i = {}
-    for (i,x) in enumerate(docids):
-        doc2i[x] = i
-    categories = [[] for x in range(0,len(docvectors))]
-    for line in open(catfile):
-        v = re.split(r'\s+', line.strip())
-        if len(v) >= 2:
-            (id,cats) = (v[0], v[1:])
-            cats = [x.decode(options.encoding) for x in cats]
-            #print id,cats
-            if id in doc2i:
-                categories[doc2i[id]] = cats
-    cmemberships = {}
-    for (i,c) in enumerate(categories):
-        for x in c:
-            cmemberships[i] = x
+    # obtain document vectors
+    (docvectors,docids) = docs2vectors_tfidf(dir, options.num_words)
+
+    eval = Evaluator(open(catfile), options.encoding)
 
     if options.method == 'svd':
         # dimensionality reduction by svd
@@ -175,14 +137,18 @@ if __name__ == '__main__':
         members[m] += 1
     for (i,x) in enumerate(centroids):
         centroids[i] /= members[i]
-    print 'initial centroids: \n', centroids
+    print  'initial centroids: \n', centroids
 
-    print '     purity: ', purity(list(enumerate(memberships)), categories, verbose=options.verbose)
-    print 'inv. purity: ', purity(cmemberships.items(), [[x] for x in memberships], verbose=options.verbose)
+    print '     purity: ', eval.purity(zip(docids,memberships))
+    print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
+    print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
+    print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
 
     memberships,centroids = kmeans(docvectors, initial=centroids, distance=lambda x,y: linalg.norm(x-y,2), threshold=options.precision, verbose=options.verbose)
     print ' result centroids: \n', centroids
     print ' result memberships: \n', memberships
 
-    print '     purity: ', purity(list(enumerate(memberships)), categories, verbose=options.verbose)
-    print 'inv. purity: ', purity(cmemberships.items(), [[x] for x in memberships], verbose=options.verbose)
+    print '     purity: ', eval.purity(zip(docids,memberships))
+    print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
+    print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
+    print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
