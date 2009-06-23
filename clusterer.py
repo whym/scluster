@@ -11,14 +11,27 @@ from math import log
 import time
 from eval import Evaluator
 
-def kmeans(vectors, distance, initial, threshold=1.0E-6, iterations=1000, verbose=False):
+def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.norm(x-y,2)):
+    c = 0
+    matrix = zeros((itemvectors.shape[0], itemvectors.shape[0]), float)
+    for (i,x) in enumerate(itemvectors):
+        for (j,y) in enumerate(itemvectors[i:]):
+            d = distance(x,y)
+            if d < epsilon:
+                c += 1
+                matrix[i][i+j] = d
+                matrix[i+j][i] = d
+    print >> sys.stderr, "ng_matrix_epsilon: ", c
+    return matrix
+
+def kmeans(itemvectors, initial, distance=lambda x,y: scipy.linalg.norm(x-y,2), threshold=1.0E-6, iterations=1000, verbose=False):
     centroids = initial
-    memberships = zeros(len(vectors), int)
+    memberships = zeros(len(itemvectors), int)
     old_objective = 0.0
     for it in range(0,iterations):
         objective = 0.0
         # renew memberships
-        for (i,v) in enumerate(vectors):
+        for (i,v) in enumerate(itemvectors):
             mi = (float(sys.maxint),None)
             for (j,c) in enumerate(centroids):
                 d = distance(v,c)
@@ -32,15 +45,33 @@ def kmeans(vectors, distance, initial, threshold=1.0E-6, iterations=1000, verbos
             break
         old_objective = objective
         # renew centroids
+        oldc = centroids
         centroids = zeros(centroids.shape, float)
         members = zeros(len(centroids), int)
         for (i,m) in enumerate(memberships):
-            centroids[m] += docvectors[i]
+            centroids[m] += itemvectors[i]
             members[m] += 1
         for (i,x) in enumerate(centroids):
-            centroids[i] /= members[i]
+            if members[i] == 0:
+                print >> sys.stderr, members, memberships
+                print >> sys.stderr, " cluster", i, "is empty"
+                centroids[i] = oldc[i]
+            else:
+                centroids[i] /= members[i]
     
     return memberships, centroids
+
+def random_kmeans_init(itemvectors, num_clusters):
+    memberships = [x*num_clusters/len(itemvectors) for x in xrange(0,len(itemvectors))]
+    random.shuffle(memberships)
+    centroids = zeros((num_clusters, itemvectors.shape[1]), float)
+    members = zeros(len(centroids), int)
+    for (i,m) in enumerate(memberships):
+        centroids[m] += itemvectors[i]
+        members[m] += 1
+    for (i,x) in enumerate(centroids):
+        centroids[i] /= members[i]
+    return (memberships,centroids)
 
 def docs2vectors_tfidf(dir, vocsize, verbose=False):
     words = {}
@@ -87,21 +118,30 @@ if __name__ == '__main__':
                       help='number of words to extract')
     parser.add_option('-m', '--method', metavar='METHOD',
                       dest='method', type=str, default='svd,kmeans',
-                      help='number of words to extract')
+                      help="""clustering algorithms:
+                              comma-separated combination of
+                              svd,kmeans,spectral
+                      """)
     parser.add_option('-o', '--output', metavar='OUTPUT',
                       dest='output', type=str, default=None,
-                      help='number of words to extract')
+                      help='output filename')
     parser.add_option('-d', '--dimension', metavar='DIMENSION',
                       dest='dimension', type=int, default=2000,
                       help='dimension of document vector')
     parser.add_option('-p', '--precision', metavar='PRECISION',
                       dest='precision', type=float, default=1.0E-6,
-                      help='dimension of document vector')
+                      help='threshold for k-means clustering convergence')
+    parser.add_option('-E', '--epsilon', metavar='EPSILON',
+                      dest='epsilon', type=float, default=10.0,
+                      help='threshold for constructing neiborhood graph')
     parser.add_option('-r', '--random-seed', metavar='SEED',
                       dest='seed', type=int, default=int(time.time()),
-                      help='number of clusters')
+                      help='random number seed')
     parser.add_option('-K', '--num-clusters', metavar='CLUSTERS',
-                      dest='clusters', type=int, default=20,
+                      dest='clusters', type=int, default=40,
+                      help='number of clusters')
+    parser.add_option('-S', '--num-spectral-clusters', metavar='SCLUSTERS',
+                      dest='sclusters', type=int, default=20,
                       help='number of clusters')
     parser.add_option('-v', '--verbose', metavar='VERBOSE',
                       dest='verbose', action='store_true', default=False,
@@ -118,6 +158,9 @@ if __name__ == '__main__':
     # obtain document vectors
     (docvectors,docids) = docs2vectors_tfidf(dir, options.num_words)
 
+    if options.verbose:
+        print '#documents: ', len(docvectors)
+
     eval = Evaluator(open(catfile), options.encoding)
 
     if 'svd' in options.method:
@@ -132,15 +175,7 @@ if __name__ == '__main__':
             print [x for x in s]
     #TODO: compare to random indexing
     
-    memberships = [x*options.clusters/len(docvectors) for x in range(0,len(docvectors))]
-    random.shuffle(memberships)
-    centroids = zeros((options.clusters, docvectors.shape[1]), float)
-    members = zeros(len(centroids), int)
-    for (i,m) in enumerate(memberships):
-        centroids[m] += docvectors[i]
-        members[m] += 1
-    for (i,x) in enumerate(centroids):
-        centroids[i] /= members[i]
+    (memberships,centroids) = random_kmeans_init(docvectors, options.clusters)
     print  'initial centroids: \n', centroids
 
     print '     purity: ', eval.purity(zip(docids,memberships))
@@ -149,7 +184,7 @@ if __name__ == '__main__':
     print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
 
     if 'kmeans' in options.method:
-        memberships,centroids = kmeans(docvectors, initial=centroids, distance=lambda x,y: scipy.linalg.norm(x-y,2), threshold=options.precision, verbose=options.verbose)
+        (memberships,centroids) = kmeans(docvectors, initial=centroids, threshold=options.precision, verbose=options.verbose)
         if options.verbose:
             print ' result centroids: \n', centroids
         if options.output:
@@ -165,6 +200,28 @@ if __name__ == '__main__':
         print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
         print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
 
+    # TODO: make it sparse, especially when computing spectral clustering directly from tfidf vectors
+
     if 'spectral' in options.method:
-        pass
+        ngmat = ng_matrix_epsilon(centroids,options.epsilon)
+        degreemat = zeros(ngmat.shape)
+        for (i,row) in enumerate(degreemat):
+            degreemat[i][i] = sum(ngmat[i])
+        laplacian = degreemat - ngmat
+        (evals,evecs) = scipy.linalg.eig(laplacian)
         
+        vectors = evecs[0:options.sclusters].transpose()
+        (mem,cen) = random_kmeans_init(vectors, options.sclusters)
+        (mem,cen) = kmeans(vectors, initial=cen, threshold=options.precision, verbose=options.verbose)
+        memberships = [mem[x] for x in memberships]
+        if options.output:
+            file = open(options.output, 'w')
+            for (doc,cluster) in zip(docids,memberships):
+                print >> file, doc, cluster
+        else:
+            print ' result memberships: \n', memberships
+        print '%d/%d' % (len(eval.evaluated_docs(zip(docids,memberships))), len(memberships))
+        print '     purity: ', eval.purity(zip(docids,memberships))
+        print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
+        print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
+        print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
