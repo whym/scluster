@@ -43,21 +43,16 @@ class Evaluator:
             for x in c:
                 self.cmemberships.append((i, x))
     def evaluated_docs(self, memberships):
-        return filter(lambda x: x[0] in self.reference, dict(memberships).keys())
+        return Evaluator.__intersect(memberships, self.reference)
     def purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        d = dict(memberships)
-        d2 = dict(self.cmemberships)
-        return Evaluator.__purity(filter(lambda x: x[0] in d2, memberships),
-                                  self.reference, macro=macro, verbose=verbose)
+        (m,r) = Evaluator.__intersect(memberships, self.reference)
+        return Evaluator.__purity(m, r, macro=macro, verbose=verbose)
 
     def inverse_purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        d = dict(memberships)
-        d2 = dict(self.cmemberships)
-        return Evaluator.__purity(filter(lambda x: x[0] in d, self.cmemberships),
-                                  dict([(x[0],[x[1]]) for x in memberships if x[0] in d2]),
-                                  macro=macro, verbose=verbose)
+        (m,r) = Evaluator.__intersect(self.cmemberships, dict(memberships))
+        return Evaluator.__purity(m, r, macro=macro, verbose=verbose)
 
     def sizes(self, memberships):
         sizes = {}
@@ -69,6 +64,11 @@ class Evaluator:
         return sizes.values()
 
     @classmethod
+    def __intersect(cls, memberships, reference):
+        d = dict(memberships)
+        return (filter(lambda x: x[0] in reference, memberships),
+                dict(map(lambda x: (x, reference[x]), filter(lambda x: x in d, reference.keys()))))
+    @classmethod
     def __purity(cls, memberships, references, macro=True, verbose=False):
         clusters = {}
         avg = 0.0
@@ -79,13 +79,12 @@ class Evaluator:
                 clusters[x] = [i]
         for docs in clusters.values():
             (m,count) = median(reduce(lambda s,x: s+x, [references[x] for x in docs]))
-            val = float(count)/float(len(docs))
             if verbose:
-                print '#', val, count, len(docs), docs, reduce(lambda s,x: s+x, [references[x] for x in docs])
+                print '# %f = %d/%d, labels %s for cluster %s' % (float(count)/float(len(docs)), count, len(docs), str(reduce(lambda s,x: s+x, [references[x] for x in docs])), str(docs))
             if macro:
-                avg += val*len(docs)
+                avg += count
             else:
-                avg += val
+                avg += float(count)/float(len(docs))
         if macro:
             return avg / len(memberships)
         else:
@@ -126,7 +125,7 @@ if __name__ == '__main__':
         memberships = Evaluator.read_membership_file(open(resfile),options.encoding)
         print '%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f' % (
             resfile,
-            len(eval.evaluated_docs(memberships)), len(memberships),
+            len(eval.evaluated_docs(memberships)[0]), len(memberships),
             len(eval.sizes(memberships)),
             float(reduce(lambda s,x: s+x, eval.sizes(memberships))) / len(eval.sizes(memberships)),
             eval.purity(memberships),
