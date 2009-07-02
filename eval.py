@@ -4,7 +4,10 @@ import sys
 import os
 import optparse
 import re
-from functools import reduce
+try:
+    from functools import reduce
+except ImportError:
+    pass
 
 def median(ls):
     d = {}
