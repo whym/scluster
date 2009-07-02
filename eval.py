@@ -42,7 +42,10 @@ class Evaluator:
         return filter(lambda x: x[0] in self.reference, dict(memberships).keys())
     def purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        return Evaluator.__purity(memberships, self.reference, macro=macro, verbose=verbose)
+        d = dict(memberships)
+        d2 = dict(self.cmemberships)
+        return Evaluator.__purity(filter(lambda x: x[0] in d2, memberships),
+                                  self.reference, macro=macro, verbose=verbose)
 
     def inverse_purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
@@ -51,6 +54,15 @@ class Evaluator:
         return Evaluator.__purity(filter(lambda x: x[0] in d, self.cmemberships),
                                   dict([(x[0],[x[1]]) for x in memberships if x[0] in d2]),
                                   macro=macro, verbose=verbose)
+
+    def sizes(self, memberships):
+        sizes = {}
+        for (x,c) in memberships:
+            if c in sizes:
+                sizes[c] += 1
+            else:
+                sizes[c] = 1
+        return sizes.values()
 
     @classmethod
     def __purity(cls, memberships, references, macro=True, verbose=False):
@@ -105,12 +117,14 @@ if __name__ == '__main__':
     if options.verbose:
         print options, catfile, resfiles
     eval = Evaluator(open(catfile), options.encoding, verbose=options.verbose)
-    print '\t%s\t%s\t%s\t%s\t%s' % ('num.', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.')
+    print '\t%s\t%s\t%s\t%s\t%s\t%s\t%s' % ('num.', 'num. cl', 'avg. size', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.')
     for resfile in resfiles:
         memberships = Evaluator.read_membership_file(open(resfile),options.encoding)
-        print '%s\t%d/%d\t%f\t%f\t%f\t%f' % (
+        print '%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f' % (
             resfile,
             len(eval.evaluated_docs(memberships)), len(memberships),
+            len(eval.sizes(memberships)),
+            float(reduce(lambda s,x: s+x, eval.sizes(memberships))) / len(eval.sizes(memberships)),
             eval.purity(memberships),
             eval.inverse_purity(memberships),
             eval.purity(memberships,macro=False),
