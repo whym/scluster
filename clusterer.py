@@ -8,7 +8,10 @@ import scipy
 import scipy.linalg
 from scipy import mat, zeros, shape, diag, dot, random
 from math import log
-from functools import reduce
+try:
+    from functools import reduce
+except ImportError:
+    pass
 import time
 from eval import Evaluator
 
@@ -23,8 +26,9 @@ def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.no
             d = distance(x,y)
             if d < epsilon:
                 c += 1
-                matrix[i][i+j] = weighting(d)
-                matrix[i+j][i] = weighting(d)
+                w = weighting(d)
+                matrix[i][i+j] = w
+                matrix[i+j][i] = w
     print >> sys.stderr, "ng_matrix_epsilon: number of edges =", c
     return matrix
 

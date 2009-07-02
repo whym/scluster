@@ -4,7 +4,10 @@ import sys
 import os
 import optparse
 import re
-from functools import reduce
+try:
+    from functools import reduce
+except ImportError:
+    pass
 
 def median(ls):
     d = {}
@@ -13,6 +16,15 @@ def median(ls):
         else:      d[x] = 1
     m = max(d.keys(), key=lambda x: d[x])
     return (m, d[m])
+
+def uniq(ls):
+    d = {}
+    ret = []
+    for x in ls:
+        if x not in d:
+            d[x] = True
+            ret.append(x)
+    return ret
 
 class Evaluator:
     """
@@ -35,7 +47,7 @@ class Evaluator:
                 if len(v) >= 2:
                     (id,cats) = (v[0], v[1:])
                     cats = [x.decode(encoding) for x in cats]
-                    self.reference[id] = cats
+                    self.reference[id] = uniq(cats)
         elif type(reference) is dict:
             self.reference = reference
         self.cmemberships = []
@@ -51,7 +63,7 @@ class Evaluator:
 
     def inverse_purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        (m,r) = Evaluator.__intersect(self.cmemberships, dict(memberships))
+        (m,r) = Evaluator.__intersect(self.cmemberships, dict([(x[0], [x[1]]) for x in memberships]))
         return Evaluator.__purity(m, r, macro=macro, verbose=verbose)
 
     def sizes(self, memberships):
@@ -71,7 +83,7 @@ class Evaluator:
     @classmethod
     def __purity(cls, memberships, references, macro=True, verbose=False):
         clusters = {}
-        avg = 0.0
+        avg = 0
         for (i,x) in memberships:
             if x in clusters:
                 clusters[x].append(i)
@@ -86,9 +98,9 @@ class Evaluator:
             else:
                 avg += float(count)/float(len(docs))
         if macro:
-            return avg / len(memberships)
+            return float(avg) / len(memberships)
         else:
-            return avg / len(clusters)
+            return float(avg) / len(clusters)
     
     @classmethod
     def read_membership_file(cls,file,encoding='UTF-8'):
