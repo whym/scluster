@@ -4,6 +4,7 @@ import sys
 import os
 import optparse
 import re
+from functools import reduce
 
 def median(ls):
     d = {}
@@ -19,6 +20,9 @@ class Evaluator:
     """
     def __init__(self, reference, encoding='UTF-8', verbose=False):
         """
+        Construct a new evaluator.  The first argument can be either a
+        dict or a file that contains the mapping from document id to categories
+        
         @param  reference:  file or dict that contains reference classifications
         @type   reference:  file
         """

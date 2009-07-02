@@ -8,6 +8,7 @@ import scipy
 import scipy.linalg
 from scipy import mat, zeros, shape, diag, dot, random
 from math import log
+from functools import reduce
 import time
 from eval import Evaluator
 
@@ -62,7 +63,7 @@ def kmeans(itemvectors, initial, distance=lambda x,y: scipy.linalg.norm(x-y,2), 
     return memberships, centroids
 
 def random_kmeans_init(itemvectors, num_clusters):
-    memberships = [x*num_clusters/len(itemvectors) for x in xrange(0,len(itemvectors))]
+    memberships = [x * num_clusters // len(itemvectors) for x in xrange(0,len(itemvectors))]
     random.shuffle(memberships)
     centroids = zeros((num_clusters, itemvectors.shape[1]), float)
     members = zeros(len(centroids), int)
@@ -97,7 +98,7 @@ def docs2vectors_tfidf(dir, vocsize, verbose=False):
                 else:
                     df[w] += 1
         tf.append((file, freq))
-    id2word = sorted(words.keys(), lambda a,b: df[b]-df[a])[0:vocsize]
+    id2word = sorted(words.keys(), key=lambda x: df[x], reverse=True)[0:vocsize]
     word2id = {}
     mat = zeros((len(tf), len(id2word)), float)
     for (i,c) in enumerate(id2word):
@@ -201,6 +202,7 @@ if __name__ == '__main__':
         print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
 
     # TODO: make it sparse, especially when computing spectral clustering directly from tfidf vectors
+    # use scipy.sparse.linalg.eigen
 
     if 'spectral' in options.method:
         ngmat = ng_matrix_epsilon(centroids,options.epsilon)
