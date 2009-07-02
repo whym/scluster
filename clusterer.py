@@ -12,17 +12,20 @@ from functools import reduce
 import time
 from eval import Evaluator
 
-def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.norm(x-y,2)):
+def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.norm(x-y,2), binary=False):
     c = 0
+    weighting = lambda x: x
+    if binary:
+        weighting = lambda x: 1
     matrix = zeros((itemvectors.shape[0], itemvectors.shape[0]), float)
     for (i,x) in enumerate(itemvectors):
         for (j,y) in enumerate(itemvectors[i:]):
             d = distance(x,y)
             if d < epsilon:
                 c += 1
-                matrix[i][i+j] = d
-                matrix[i+j][i] = d
-    print >> sys.stderr, "ng_matrix_epsilon: ", c
+                matrix[i][i+j] = weighting(d)
+                matrix[i+j][i] = weighting(d)
+    print >> sys.stderr, "ng_matrix_epsilon: number of edges =", c
     return matrix
 
 def kmeans(itemvectors, initial, distance=lambda x,y: scipy.linalg.norm(x-y,2), threshold=1.0E-6, iterations=1000, verbose=False):
@@ -144,6 +147,9 @@ if __name__ == '__main__':
     parser.add_option('-S', '--num-spectral-clusters', metavar='SCLUSTERS',
                       dest='sclusters', type=int, default=20,
                       help='number of clusters')
+    parser.add_option('--binary-neighbourhood', metavar='BINARY_NEIGHBOUR',
+                      dest='bneighbour', action='store_true', default=False,
+                      help='use binary value for neighborhood')
     parser.add_option('-v', '--verbose', metavar='VERBOSE',
                       dest='verbose', action='store_true', default=False,
                       help='turn on verbose message output')
@@ -192,6 +198,7 @@ if __name__ == '__main__':
             file = open(options.output, 'w')
             for (doc,cluster) in zip(docids,memberships):
                 print >> file, doc, cluster
+            file.close()
         else:
             print ' result memberships: \n', memberships
 
@@ -205,7 +212,7 @@ if __name__ == '__main__':
     # use scipy.sparse.linalg.eigen
 
     if 'spectral' in options.method:
-        ngmat = ng_matrix_epsilon(centroids,options.epsilon)
+        ngmat = ng_matrix_epsilon(centroids,options.epsilon, binary=options.bneighbour)
         degreemat = zeros(ngmat.shape)
         for (i,row) in enumerate(degreemat):
             degreemat[i][i] = sum(ngmat[i])
@@ -220,6 +227,7 @@ if __name__ == '__main__':
             file = open(options.output, 'w')
             for (doc,cluster) in zip(docids,memberships):
                 print >> file, doc, cluster
+            file.close()
         else:
             print ' result memberships: \n', memberships
         print '%d/%d' % (len(eval.evaluated_docs(zip(docids,memberships))), len(memberships))
