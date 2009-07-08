@@ -78,8 +78,11 @@ class Evaluator:
     @classmethod
     def __intersect(cls, memberships, reference):
         d = dict(memberships)
+        ret2 = {}
+        for x in filter(lambda x: x in d, reference.keys()):
+            ret2[x] = reference[x]
         return (filter(lambda x: x[0] in reference, memberships),
-                dict(map(lambda x: (x, reference[x]), filter(lambda x: x in d, reference.keys()))))
+                ret2)
     @classmethod
     def __purity(cls, memberships, references, macro=True, verbose=False):
         clusters = {}
