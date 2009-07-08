@@ -4,6 +4,7 @@ import sys
 import os
 import optparse
 import re
+import math
 try:
     from functools import reduce
 except ImportError:
@@ -25,6 +26,13 @@ def uniq(ls):
             d[x] = True
             ret.append(x)
     return ret
+
+def avg(ls, map=lambda x: x):
+    return float(reduce(lambda s,x: s+map(x), ls)) / float(len(ls))
+
+def deviation(ls,order=2):
+    a = avg(ls)
+    return avg(ls, map=lambda x: (x-a)**order)
 
 class Evaluator:
     """
@@ -135,14 +143,15 @@ if __name__ == '__main__':
     if options.verbose:
         print options, catfile, resfiles
     eval = Evaluator(open(catfile), options.encoding, verbose=options.verbose)
-    print '\t%s\t%s\t%s\t%s\t%s\t%s\t%s' % ('num.', 'num. cl', 'avg. size', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.')
+    print '\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' % ('num.', 'num. cl', 'avg. size', 'dev. size', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.')
     for resfile in resfiles:
         memberships = Evaluator.read_membership_file(open(resfile),options.encoding)
-        print '%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f' % (
+        print '%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f' % (
             resfile,
             len(eval.evaluated_docs(memberships)[0]), len(memberships),
             len(eval.sizes(memberships)),
-            float(reduce(lambda s,x: s+x, eval.sizes(memberships))) / len(eval.sizes(memberships)),
+            avg(eval.sizes(memberships)),
+            math.sqrt(deviation(eval.sizes(memberships))),
             eval.purity(memberships),
             eval.inverse_purity(memberships),
             eval.purity(memberships,macro=False),
