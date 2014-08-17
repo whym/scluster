@@ -13,8 +13,7 @@ except ImportError:
 def median(ls):
     d = {}
     for x in ls:
-        if x in d: d[x] += 1
-        else:      d[x] = 1
+        d[x] = d.get(x, 0) + 1
     m = max(d.keys(), key=lambda x: d[x])
     return (m, d[m])
 
@@ -41,14 +40,20 @@ class Evaluator:
     def __init__(self, reference, encoding='UTF-8', verbose=False):
         """
         Construct a new evaluator.  The first argument can be either a
-        dict or a file that contains the mapping from document id to categories
+        dict or a file that contains the mapping from document id to categories.
+        The format of the files:
+        <document-id> <cluster-id> <cluster-id> ...
+        <document-id> <cluster-id> <cluster-id> ...
+        ..
         
         @param  reference:  file or dict that contains reference classifications
         @type   reference:  file
         """
         
         self.verbose=verbose
-        if type(reference) is file:
+        if type(reference) is dict:
+            self.reference = reference
+        else:
             self.reference = {}
             for line in reference:
                 v = re.split(r'\s+', line.strip())
@@ -56,8 +61,6 @@ class Evaluator:
                     (id,cats) = (v[0], v[1:])
                     cats = [x.decode(encoding) for x in cats]
                     self.reference[id] = uniq(cats)
-        elif type(reference) is dict:
-            self.reference = reference
         self.cmemberships = []
         for (i,c) in self.reference.items():
             for x in c:
@@ -129,9 +132,6 @@ class Evaluator:
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
-    parser.add_option('-m', '--method', metavar='METHOD',
-                      dest='method', type=str, default='svd',
-                      help='number of words to extract')
     parser.add_option('-e', '--encoding', metavar='ENCODING',
                       dest='encoding', default='utf-8',
                       help='input/output encoding')

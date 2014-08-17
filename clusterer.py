@@ -13,9 +13,16 @@ try:
 except ImportError:
     pass
 import time
-from eval import Evaluator
+from evaluate import Evaluator
 
 def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.norm(x-y,2), binary=False):
+    """
+    Extract a neighborhood matrix from the given item vectors.
+
+    @param  distance: a function two vectors (x,y) to a double value
+    @param   epsilon: threshold that defines neighborhood
+
+    """
     c = 0
     weighting = lambda x: x
     if binary:
@@ -70,8 +77,12 @@ def kmeans(itemvectors, initial, distance=lambda x,y: scipy.linalg.norm(x-y,2), 
     return memberships, centroids
 
 def random_kmeans_init(itemvectors, num_clusters):
+    """
+    for each item, assign a random label
+    """
     memberships = [x * num_clusters // len(itemvectors) for x in xrange(0,len(itemvectors))]
     random.shuffle(memberships)
+
     centroids = zeros((num_clusters, itemvectors.shape[1]), float)
     members = zeros(len(centroids), int)
     for (i,m) in enumerate(memberships):
@@ -79,6 +90,25 @@ def random_kmeans_init(itemvectors, num_clusters):
         members[m] += 1
     for (i,x) in enumerate(centroids):
         centroids[i] /= members[i]
+    return (memberships,centroids)
+
+def random_kmeans_init2(itemvectors, num_clusters, distance=lambda x,y: scipy.linalg.norm(x-y,2)):
+    """
+    choose random k items and let them be centroids,
+    and assign memberships accordingly to other items
+    """
+    centroids = itemvectors.copy()
+    random.shuffle(centroids)
+    centroids = centroids[0:num_clusters]
+
+    memberships = [0 for x in itemvectors]
+    for (i,v) in enumerate(itemvectors):
+        mi = (float(sys.maxint),None)
+        for (j,c) in enumerate(centroids):
+            d = distance(v,c)
+            if d < mi[0]:
+                mi = (d, j)
+                memberships[i] = j
     return (memberships,centroids)
 
 def docs2vectors_tfidf(dir, vocsize, verbose=False):
@@ -89,22 +119,16 @@ def docs2vectors_tfidf(dir, vocsize, verbose=False):
     docs = os.listdir(dir)
     for file in docs:
         freq = {}
-        print 'reading', file
+        if verbose:
+            print 'reading ' + file
         for line in open(dir + '/' + file):
             for w in re.split(r'\s+', line.strip()):
-                if w not in words:
-                    words[w] = 1
-                else:
-                    words[w] += 1
-                if w not in freq:
-                    freq[w] = 1
-                else:
-                    freq[w] += 1
-                if w not in df:
-                    df[w] = 1
-                else:
-                    df[w] += 1
+                words[w] = words.get(w, 0) + 1
+                freq[w]  =  freq.get(w, 0) + 1
+                #df[w]    =    df.get(w, 0) + 1
         tf.append((file, freq))
+        for w in freq.keys():
+            df[w] = df.get(w, 0) + 1
     id2word = sorted(words.keys(), key=lambda x: df[x], reverse=True)[0:vocsize]
     word2id = {}
     mat = zeros((len(tf), len(id2word)), float)
@@ -115,6 +139,23 @@ def docs2vectors_tfidf(dir, vocsize, verbose=False):
             row[word2id[w]] = log(1.0 + tf[i][1][w]) / df[w]
     return (mat, docs)
 
+
+def print_evaluation(docids, memberships):
+
+    def harm_mean(x,y):
+        return 2 / ((1/x + 1/y))
+    
+    purity   = evaluate.purity(zip(docids,memberships))
+    ipurity  = evaluate.inverse_purity(zip(docids,memberships))
+    mpurity  = evaluate.purity(zip(docids,memberships),macro=False)
+    mipurity = evaluate.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
+    print '%d/%d' % (len(evaluate.evaluated_docs(zip(docids,memberships))), len(memberships))
+    print '     purity:', purity
+    print 'inv. purity:', ipurity
+    print ' harm. mean:', harm_mean(purity, ipurity)
+    print '     mi. purity:', mpurity
+    print 'mi. inv. purity:', mipurity
+    print ' harm. mean:', harm_mean(mpurity, mipurity)
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
@@ -172,7 +213,7 @@ if __name__ == '__main__':
     if options.verbose:
         print '#documents: ', len(docvectors)
 
-    eval = Evaluator(open(catfile), options.encoding)
+    evaluate = Evaluator(open(catfile), options.encoding)
 
     if 'svd' in options.method:
         # dimensionality reduction by svd
@@ -186,13 +227,10 @@ if __name__ == '__main__':
             print [x for x in s]
     #TODO: compare to random indexing
     
-    (memberships,centroids) = random_kmeans_init(docvectors, options.clusters)
+    (memberships,centroids) = random_kmeans_init2(docvectors, options.clusters)
     print  'initial centroids: \n', centroids
 
-    print '     purity: ', eval.purity(zip(docids,memberships))
-    print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
-    print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
-    print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False)
+    print_evaluation(docids, memberships)
 
     if 'kmeans' in options.method:
         (memberships,centroids) = kmeans(docvectors, initial=centroids, threshold=options.precision, verbose=options.verbose)
@@ -206,11 +244,7 @@ if __name__ == '__main__':
         else:
             print ' result memberships: \n', memberships
 
-        print '%d/%d' % (len(eval.evaluated_docs(zip(docids,memberships))), len(memberships))
-        print '     purity: ', eval.purity(zip(docids,memberships))
-        print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
-        print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
-        print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
+        print_evaluation(docids, memberships)
 
     # TODO: make it sparse, especially when computing spectral clustering directly from tfidf vectors
     # use scipy.sparse.linalg.eigen
@@ -221,10 +255,10 @@ if __name__ == '__main__':
         for (i,row) in enumerate(degreemat):
             degreemat[i][i] = sum(ngmat[i])
         laplacian = degreemat - ngmat
-        (evals,evecs) = scipy.linalg.eig(laplacian)
+        (evaluates,evecs) = scipy.linalg.eig(laplacian)
         
         vectors = evecs[0:options.sclusters].transpose()
-        (mem,cen) = random_kmeans_init(vectors, options.sclusters)
+        (mem,cen) = random_kmeans_init2(vectors, options.sclusters)
         (mem,cen) = kmeans(vectors, initial=cen, threshold=options.precision, verbose=options.verbose)
         memberships = [mem[x] for x in memberships]
         if options.output:
@@ -234,8 +268,4 @@ if __name__ == '__main__':
             file.close()
         else:
             print ' result memberships: \n', memberships
-        print '%d/%d' % (len(eval.evaluated_docs(zip(docids,memberships))), len(memberships))
-        print '     purity: ', eval.purity(zip(docids,memberships))
-        print 'inv. purity: ', eval.inverse_purity(zip(docids,memberships))
-        print '     mi. purity: ', eval.purity(zip(docids,memberships),macro=False)
-        print 'mi. inv. purity: ', eval.inverse_purity(zip(docids,memberships),macro=False,verbose=True)
+        print_evaluation(docids, memberships)
