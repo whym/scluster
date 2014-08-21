@@ -155,7 +155,7 @@ def print_evaluation(docids, memberships):
     print ' harm. mean:', harm_mean(purity, ipurity)
     print '     mi. purity:', mpurity
     print 'mi. inv. purity:', mipurity
-    print ' harm. mean:', harm_mean(mpurity, mipurity)
+    print '     harm. mean:', harm_mean(mpurity, mipurity)
 
 if __name__ == '__main__':
     parser = optparse.OptionParser()
@@ -174,8 +174,8 @@ if __name__ == '__main__':
     parser.add_option('-o', '--output', metavar='OUTPUT',
                       dest='output', type=str, default=None,
                       help='output filename')
-    parser.add_option('-d', '--dimension', metavar='DIMENSION',
-                      dest='dimension', type=int, default=2000,
+    parser.add_option('-a', '--approximation-error', metavar='PERCENT',
+                      dest='aerror', type=float, default=1,
                       help='dimension of document vector')
     parser.add_option('-p', '--precision', metavar='PRECISION',
                       dest='precision', type=float, default=1.0E-6,
@@ -217,10 +217,16 @@ if __name__ == '__main__':
 
     if 'svd' in options.method:
         # dimensionality reduction by svd
-        (U,s,Vh) = scipy.linalg.svd(docvectors,full_matrices=False)
+        (U,s,Vh) = scipy.linalg.svd(docvectors, full_matrices=False)
         #print shape(U),shape(s),shape(Vh)
         #print [x for x in docvectors[1]]
-        docvectors = dot(U[:,:options.dimension], diag(s[:options.dimension]))
+        dim = U.shape[0]
+        for i in xrange(1, s.shape[0]):
+            if 1 - s[0:i].sum()/s.sum() < options.aerror / 100.0:
+                dim = i
+                break
+        docvectors = dot(U[:,:dim], diag(s[:dim]))
+        print 'comopressed %d dims into %d dims' % (U.shape[0], dim)
 
         #print [x for x in docvectors[1]]
         if options.verbose:
@@ -228,7 +234,8 @@ if __name__ == '__main__':
     #TODO: compare to random indexing
     
     (memberships,centroids) = random_kmeans_init2(docvectors, options.clusters)
-    print  'initial centroids: \n', centroids
+    print 'initial centroids: \n', centroids
+    print 'initial memberships: \n', memberships
 
     print_evaluation(docids, memberships)
 
