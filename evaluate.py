@@ -37,7 +37,7 @@ class Evaluator:
     """
     
     """
-    def __init__(self, reference, encoding='UTF-8', verbose=False):
+    def __init__(self, reference, verbose=False):
         """
         Construct a new evaluator.  The first argument can be either a
         dict or a file that contains the mapping from document id to categories.
@@ -59,7 +59,6 @@ class Evaluator:
                 v = re.split(r'\s+', line.strip())
                 if len(v) >= 2:
                     (id,cats) = (v[0], v[1:])
-                    cats = [x.decode(encoding) for x in cats]
                     self.reference[id] = uniq(cats)
         self.cmemberships = []
         for (i,c) in self.reference.items():
@@ -69,12 +68,12 @@ class Evaluator:
         return Evaluator.__intersect(memberships, self.reference)
     def purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        (m,r) = Evaluator.__intersect(memberships, self.reference)
+        (m, r) = Evaluator.__intersect(memberships, self.reference)
         return Evaluator.__purity(m, r, macro=macro, verbose=verbose)
 
     def inverse_purity(self, memberships, macro=True, verbose=None):
         verbose = self.verbose if verbose is None else False
-        (m,r) = Evaluator.__intersect(self.cmemberships, dict([(x[0], [x[1]]) for x in memberships]))
+        (m, r) = Evaluator.__intersect(self.cmemberships, dict([(x[0], [x[1]]) for x in memberships]))
         return Evaluator.__purity(m, r, macro=macro, verbose=verbose)
 
     def sizes(self, memberships):
@@ -88,16 +87,18 @@ class Evaluator:
 
     @classmethod
     def __intersect(cls, memberships, reference):
-        d = dict(memberships)
+        mem = dict(memberships)
         ret2 = {}
-        for x in filter(lambda x: x in d, reference.keys()):
-            ret2[x] = reference[x]
-        return (filter(lambda x: x[0] in reference, memberships),
+        for x in reference.keys():
+            if x in mem:
+                ret2[x] = reference[x]
+        return ([x for x in mem.items() if str(x[0]) in reference],
                 ret2)
     @classmethod
-    def __purity(cls, memberships, references, macro=True, verbose=False):
+    def __purity(cls, mem, references, macro=True, verbose=False):
         clusters = {}
         avg = 0
+        memberships = [x for x in mem]
         for (i,x) in memberships:
             if x in clusters:
                 clusters[x].append(i)
@@ -106,7 +107,7 @@ class Evaluator:
         for docs in clusters.values():
             (m,count) = median(reduce(lambda s,x: s+x, [references[x] for x in docs]))
             if verbose:
-                print '# %f = %d/%d, labels %s for cluster %s' % (float(count)/float(len(docs)), count, len(docs), str(reduce(lambda s,x: s+x, [references[x] for x in docs])), str(docs))
+                print('# %f = %d/%d, labels %s for cluster %s' % (float(count)/float(len(docs)), count, len(docs), str(reduce(lambda s,x: s+x, [references[x] for x in docs])), str(docs)))
             if macro:
                 avg += count
             else:
@@ -117,15 +118,14 @@ class Evaluator:
             return float(avg) / len(clusters)
     
     @classmethod
-    def read_membership_file(cls,file,encoding='UTF-8'):
+    def read_membership_file(cls, ofile):
         m = []
-        for line in file:
+        for line in ofile:
             p = line.rfind('#')
             if p == -1:  p = len(line)
             v = re.split(r'\s+', line[0:p].strip())
             if len(v) >= 2:
                 (id,cats) = (v[0], v[1:])
-                cats = [x.decode(encoding) for x in cats]
                 m.append((id,cats[0]))
         return m
 
@@ -141,12 +141,12 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     (catfile,resfiles) = tuple([args[0],args[1:]])
     if options.verbose:
-        print options, catfile, resfiles
-    eval = Evaluator(open(catfile), options.encoding, verbose=options.verbose)
-    print '\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' % ('num.', 'num. cl', 'avg. size', 'dev. size', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.')
+        print('%s %s %s' % (options, catfile, resfiles))
+    eval = Evaluator(codecs.open(catfile, encoding=options.encoding), verbose=options.verbose)
+    print('\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' % ('num.', 'num. cl', 'avg. size', 'dev. size', 'ma. pur.', 'ma. i. pur.', 'mi. pur.', 'mi. i. pur.'))
     for resfile in resfiles:
-        memberships = Evaluator.read_membership_file(open(resfile),options.encoding)
-        print '%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f' % (
+        memberships = Evaluator.read_membership_file(codecs.open(resfile, encoding=options.encoding))
+        print('%s\t%d/%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f' % (
             resfile,
             len(eval.evaluated_docs(memberships)[0]), len(memberships),
             len(eval.sizes(memberships)),
@@ -155,4 +155,4 @@ if __name__ == '__main__':
             eval.purity(memberships),
             eval.inverse_purity(memberships),
             eval.purity(memberships,macro=False),
-            eval.inverse_purity(memberships,macro=False))
+            eval.inverse_purity(memberships,macro=False)))

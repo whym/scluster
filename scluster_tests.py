@@ -2,7 +2,7 @@
 
 import unittest
 from tempfile import mktemp, mkdtemp
-from StringIO import StringIO
+from six import StringIO
 import evaluate
 
 class TestDocCluster(unittest.TestCase):
