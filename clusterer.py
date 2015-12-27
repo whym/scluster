@@ -2,7 +2,7 @@
 
 import sys
 import os
-import optparse
+import argparse
 import re
 import codecs
 import scipy
@@ -156,93 +156,94 @@ def print_evaluation(evaluate, docids, memberships):
     print('     harm. mean: %s' % harm_mean(mpurity, mipurity))
 
 if __name__ == '__main__':
-    parser = optparse.OptionParser()
-    parser.add_option('-e', '--encoding', metavar='ENCODING',
-                      dest='encoding', default='utf-8',
-                      help='input/output encoding')
-    parser.add_option('-n', '--num-words', metavar='NUM_WORDS',
-                      dest='num_words', type=int, default=5000,
-                      help='number of words to extract')
-    parser.add_option('-m', '--method', metavar='METHOD',
-                      dest='method', type=str, default='svd,kmeans',
-                      help="""clustering algorithms:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--encoding', metavar='ENCODING',
+                        dest='encoding', default='utf-8',
+                        help='input/output encoding')
+    parser.add_argument('-n', '--num-words', metavar='NUM_WORDS',
+                        dest='num_words', type=int, default=5000,
+                        help='number of words to extract')
+    parser.add_argument('-m', '--method', metavar='METHOD',
+                        dest='method', type=str, default='svd,kmeans',
+                        help="""clustering algorithms:
                               comma-separated combination of
                               svd,kmeans,spectral
-                      """)
-    parser.add_option('-o', '--output', metavar='OUTPUT',
-                      dest='output', type=str, default=None,
-                      help='output filename')
-    parser.add_option('-a', '--approximation-error', metavar='PERCENT',
-                      dest='aerror', type=float, default=1,
-                      help='dimension of document vector')
-    parser.add_option('-p', '--precision', metavar='PRECISION',
-                      dest='precision', type=float, default=1.0E-6,
-                      help='threshold for k-means clustering convergence')
-    parser.add_option('-E', '--epsilon', metavar='EPSILON',
-                      dest='epsilon', type=float, default=10.0,
-                      help='threshold for constructing neiborhood graph')
-    parser.add_option('-r', '--random-seed', metavar='SEED',
-                      dest='seed', type=int, default=int(time.time()),
-                      help='random number seed')
-    parser.add_option('-K', '--num-clusters', metavar='CLUSTERS',
-                      dest='clusters', type=int, default=40,
-                      help='number of clusters')
-    parser.add_option('-S', '--num-spectral-clusters', metavar='SCLUSTERS',
-                      dest='sclusters', type=int, default=20,
-                      help='number of clusters')
-    parser.add_option('--binary-neighbourhood', metavar='BINARY_NEIGHBOUR',
-                      dest='bneighbour', action='store_true', default=False,
-                      help='use binary value for neighborhood')
-    parser.add_option('-v', '--verbose', metavar='VERBOSE',
-                      dest='verbose', action='store_true', default=False,
-                      help='turn on verbose message output')
-    (options, args) = parser.parse_args()
-    (catfile,dr) = tuple(args[0:2])
-    options.method = options.method.split(',')
-    options.method = dict(zip(options.method, options.method))
-    if options.verbose:
-        print('%s %s %s' % (options, catfile, dr))
+                        """)
+    parser.add_argument('-o', '--output', metavar='OUTPUT',
+                        dest='output', type=str, default=None,
+                        help='output filename')
+    parser.add_argument('-a', '--approximation-error', metavar='PERCENT',
+                        dest='aerror', type=float, default=1,
+                        help='dimension of document vector')
+    parser.add_argument('-p', '--precision', metavar='PRECISION',
+                        dest='precision', type=float, default=1.0E-6,
+                        help='threshold for k-means clustering convergence')
+    parser.add_argument('-E', '--epsilon', metavar='EPSILON',
+                        dest='epsilon', type=float, default=10.0,
+                        help='threshold for constructing neiborhood graph')
+    parser.add_argument('-r', '--random-seed', metavar='SEED',
+                        dest='seed', type=int, default=int(time.time()),
+                        help='random number seed')
+    parser.add_argument('-K', '--num-clusters', metavar='CLUSTERS',
+                        dest='clusters', type=int, default=40,
+                        help='number of clusters')
+    parser.add_argument('-S', '--num-spectral-clusters', metavar='SCLUSTERS',
+                        dest='sclusters', type=int, default=20,
+                        help='number of clusters')
+    parser.add_argument('--binary-neighbourhood',
+                        dest='bneighbour', action='store_true', default=False,
+                        help='use binary value for neighborhood')
+    parser.add_argument('-v', '--verbose',
+                        dest='verbose', action='store_true', default=False,
+                        help='turn on verbose message output')
+    parser.add_argument('catfile')
+    parser.add_argument('directory')
+    args = parser.parse_args()
+    args.method = args.method.split(',')
+    args.method = dict(zip(args.method, args.method))
+    if args.verbose:
+        print('%s %s %s' % (args, args.catfile, args.directory))
     
-    random.seed(options.seed)
+    random.seed(args.seed)
 
     # obtain document vectors
-    (docvectors, docids) = docs2vectors_tfidf(dr, options.num_words, options.verbose)
+    (docvectors, docids) = docs2vectors_tfidf(args.directory, args.num_words, args.verbose)
 
-    if options.verbose:
+    if args.verbose:
         print('#documents: %d' % len(docvectors))
 
-    evaluate = Evaluator(codecs.open(catfile, encoding=options.encoding))
+    evaluate = Evaluator(codecs.open(args.catfile, encoding=args.encoding))
 
-    if 'svd' in options.method:
+    if 'svd' in args.method:
         # dimensionality reduction by svd
         (U,s,Vh) = scipy.linalg.svd(docvectors, full_matrices=False)
         #print shape(U),shape(s),shape(Vh)
         #print [x for x in docvectors[1]]
         dim = U.shape[0]
         for i in xrange(1, s.shape[0]):
-            if 1 - s[0:i].sum()/s.sum() < options.aerror / 100.0:
+            if 1 - s[0:i].sum()/s.sum() < args.aerror / 100.0:
                 dim = i
                 break
         docvectors = dot(U[:,:dim], diag(s[:dim]))
         print('comopressed %d dims into %d dims' % (U.shape[0], dim))
 
         #print [x for x in docvectors[1]]
-        if options.verbose:
+        if args.verbose:
             print([x for x in s])
     #TODO: compare to random indexing
     
-    (memberships, centroids) = random_kmeans_init2(docvectors, options.clusters)
+    (memberships, centroids) = random_kmeans_init2(docvectors, args.clusters)
     print('initial centroids: \n %s' % centroids)
     print('initial memberships: \n %s' % memberships)
 
     print_evaluation(evaluate, docids, memberships)
 
-    if 'kmeans' in options.method:
-        (memberships,centroids) = kmeans(docvectors, initial=centroids, threshold=options.precision, verbose=options.verbose)
-        if options.verbose:
+    if 'kmeans' in args.method:
+        (memberships,centroids) = kmeans(docvectors, initial=centroids, threshold=args.precision, verbose=args.verbose)
+        if args.verbose:
             print(' result centroids: \n %s' % centroids)
-        if options.output:
-            ofile = open(options.output, 'w')
+        if args.output:
+            ofile = open(args.output, 'w')
             for (doc,cluster) in zip(docids,memberships):
                 ofile.write('%s %s\n' % (doc, cluster))
             ofile.close()
@@ -254,20 +255,20 @@ if __name__ == '__main__':
     # TODO: make it sparse, especially when computing spectral clustering directly from tfidf vectors
     # use scipy.sparse.linalg.eigen
 
-    if 'spectral' in options.method:
-        ngmat = ng_matrix_epsilon(centroids,options.epsilon, binary=options.bneighbour)
+    if 'spectral' in args.method:
+        ngmat = ng_matrix_epsilon(centroids,args.epsilon, binary=args.bneighbour)
         degreemat = zeros(ngmat.shape)
         for (i,row) in enumerate(degreemat):
             degreemat[i][i] = sum(ngmat[i])
         laplacian = degreemat - ngmat
         (evaluates, evecs) = scipy.linalg.eig(laplacian)
         
-        vectors = evecs[0:options.sclusters].transpose()
-        (mem,cen) = random_kmeans_init2(vectors, options.sclusters)
-        (mem,cen) = kmeans(vectors, initial=cen, threshold=options.precision, verbose=options.verbose)
+        vectors = evecs[0:args.sclusters].transpose()
+        (mem,cen) = random_kmeans_init2(vectors, args.sclusters)
+        (mem,cen) = kmeans(vectors, initial=cen, threshold=args.precision, verbose=args.verbose)
         memberships = [mem[x] for x in memberships]
-        if options.output:
-            ofile = open(options.output, 'w')
+        if args.output:
+            ofile = open(args.output, 'w')
             for (doc,cluster) in zip(docids,memberships):
                 ofile.write('%s %s\n' % (doc, cluster))
             ofile.close()
