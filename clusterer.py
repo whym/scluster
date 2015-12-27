@@ -225,7 +225,7 @@ if __name__ == '__main__':
                 dim = i
                 break
         docvectors = dot(U[:,:dim], diag(s[:dim]))
-        print('comopressed %d dims into %d dims' % (U.shape[0], dim))
+        print('compressed %d dims into %d dims' % (U.shape[0], dim))
 
         #print [x for x in docvectors[1]]
         if args.verbose:
