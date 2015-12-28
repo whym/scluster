@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+from six.moves import xrange
 import sys
 import os
 import argparse
@@ -7,12 +8,16 @@ import re
 import codecs
 import scipy
 import scipy.linalg
-from scipy import mat, zeros, shape, diag, dot, random
+import numpy as np
 from math import log
 import time
 from evaluate import Evaluator
 
-def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.norm(x-y,2), binary=False):
+
+edist = lambda d, cs: np.sum((d -cs) ** 2, axis=1)
+
+
+def ng_matrix_epsilon(itemvectors, epsilon, distance=edist, binary=False):
     """
     Extract a neighborhood matrix from the given item vectors.
 
@@ -21,92 +26,72 @@ def ng_matrix_epsilon(itemvectors, epsilon, distance=lambda x,y: scipy.linalg.no
 
     """
     c = 0
-    weighting = lambda x: x
-    if binary:
-        weighting = lambda x: 1
-    matrix = zeros((itemvectors.shape[0], itemvectors.shape[0]), float)
+    matrix = np.zeros((itemvectors.shape[0], itemvectors.shape[0]), float)
     for (i,x) in enumerate(itemvectors):
-        for (j,y) in enumerate(itemvectors[i:]):
-            d = distance(x,y)
-            if d < epsilon:
-                c += 1
-                w = weighting(d)
-                matrix[i][i+j] = w
-                matrix[i+j][i] = w
-    sys.stderr.write("ng_matrix_epsilon: number of edges = %s\n" % c)
+        matrix[i] = distance(itemvectors[i], itemvectors)
+    matrix[matrix > epsilon] = 0.0
+    if binary:
+        matrix[matrix > 0] = 1.0
+
+    c = np.sum(matrix > 0)
+    sys.stderr.write("ng_matrix_epsilon: number of edges = %s (%s)\n" % (c,  matrix.shape[0] * matrix.shape[1]))
     return matrix
 
-def kmeans(itemvectors, initial, distance=lambda x,y: scipy.linalg.norm(x-y,2), threshold=1.0E-6, iterations=1000, verbose=False):
+
+def kmeans(itemvectors, initial, distance=edist, threshold=1.0E-6, iterations=1000, verbose=False):
     centroids = initial
-    memberships = zeros(len(itemvectors), int)
+    memberships = np.zeros(len(itemvectors), int)
     old_objective = 0.0
-    for it in range(0,iterations):
-        objective = 0.0
+    for it in xrange(0, iterations):
         # renew memberships
-        for (i,v) in enumerate(itemvectors):
-            mi = (float('inf'),None)
-            for (j,c) in enumerate(centroids):
-                d = distance(v,c)
-                if d < mi[0]:
-                    mi = (d, j)
-                    memberships[i] = j
-            objective += mi[0]
-        if verbose:
-            print(objective)
+        memberships = np.array([np.argmin(distance(d, centroids)) for d in itemvectors])
+        objective = np.sum(np.min(distance(d, centroids)) for d in itemvectors)
+        
+        print('iteration %d: %f' % (it, objective))
         if abs(objective - old_objective) < threshold:
             break
         old_objective = objective
+
         # renew centroids
-        oldc = centroids
-        centroids = zeros(centroids.shape, float)
-        members = zeros(len(centroids), int)
-        for (i,m) in enumerate(memberships):
-            centroids[m] += itemvectors[i]
-            members[m] += 1
-        for (i,x) in enumerate(centroids):
-            if members[i] == 0:
-                sys.stderr.write('''%s %s
- cluster %d is empty
-''' % (members, memberships, i))
-                centroids[i] = oldc[i]
-            else:
-                centroids[i] /= members[i]
-    
+        centroids = renew_centroids(itemvectors, memberships, centroids, verbose)
+
     return memberships, centroids
+
+def renew_centroids(itemvectors, memberships, num_clusters, verbose=False):
+    if isinstance(num_clusters, int):
+        centroids = np.zeros((num_clusters, itemvectors.shape[1]), float)
+    else:
+        centroids = num_clusters.copy()
+        num_clusters = len(centroids)
+    for i in xrange(0, num_clusters):
+        members = itemvectors[memberships == i]
+        if len(members) > 0:
+            centroids[i] = np.mean(members, axis=0)
+        else:
+            if verbose:
+                sys.stderr.write(' cluster %d is empty; not updating\n' % i)
+    return centroids
 
 def random_kmeans_init(itemvectors, num_clusters):
     """
     for each item, assign a random label
     """
     memberships = [x * num_clusters // len(itemvectors) for x in xrange(0,len(itemvectors))]
-    random.shuffle(memberships)
+    np.random.shuffle(memberships)
 
-    centroids = zeros((num_clusters, itemvectors.shape[1]), float)
-    members = zeros(len(centroids), int)
-    for (i,m) in enumerate(memberships):
-        centroids[m] += itemvectors[i]
-        members[m] += 1
-    for (i,x) in enumerate(centroids):
-        centroids[i] /= members[i]
+    centroids = renew_centroids(itemvectors, memberships, num_clusters)
     return (memberships,centroids)
 
-def random_kmeans_init2(itemvectors, num_clusters, distance=lambda x,y: scipy.linalg.norm(x-y,2)):
+def random_kmeans_init2(itemvectors, num_clusters, distance=edist):
     """
     choose random k items and let them be centroids,
     and assign memberships accordingly to other items
     """
     centroids = itemvectors.copy()
-    random.shuffle(centroids)
+    np.random.shuffle(centroids)
     centroids = centroids[0:num_clusters]
 
-    memberships = [0 for x in itemvectors]
-    for (i,v) in enumerate(itemvectors):
-        mi = (float('inf'),None)
-        for (j,c) in enumerate(centroids):
-            d = distance(v,c)
-            if d < mi[0]:
-                mi = (d, j)
-                memberships[i] = j
+    memberships = np.array([np.argmin(distance(d, centroids)) for d in itemvectors])
     return (memberships, centroids)
 
 def docs2vectors_tfidf(dr, vocsize, verbose=False):
@@ -129,7 +114,7 @@ def docs2vectors_tfidf(dr, vocsize, verbose=False):
             df[w] = df.get(w, 0) + 1
     id2word = sorted(words.keys(), key=lambda x: df[x], reverse=True)[0:vocsize]
     word2id = {}
-    mat = zeros((len(tf), len(id2word)), float)
+    mat = np.zeros((len(tf), len(id2word)), float)
     for (i,c) in enumerate(id2word):
         word2id[c] = i
     for (i,row) in enumerate(mat):
@@ -176,7 +161,7 @@ if __name__ == '__main__':
                         dest='aerror', type=float, default=1,
                         help='dimension of document vector')
     parser.add_argument('-p', '--precision', metavar='PRECISION',
-                        dest='precision', type=float, default=1.0E-6,
+                        dest='precision', type=float, default=1.0E-4,
                         help='threshold for k-means clustering convergence')
     parser.add_argument('-E', '--epsilon', metavar='EPSILON',
                         dest='epsilon', type=float, default=10.0,
@@ -185,7 +170,7 @@ if __name__ == '__main__':
                         dest='seed', type=int, default=int(time.time()),
                         help='random number seed')
     parser.add_argument('-K', '--num-clusters', metavar='CLUSTERS',
-                        dest='clusters', type=int, default=40,
+                        dest='clusters', type=int, default=60,
                         help='number of clusters')
     parser.add_argument('-S', '--num-spectral-clusters', metavar='SCLUSTERS',
                         dest='sclusters', type=int, default=20,
@@ -204,7 +189,7 @@ if __name__ == '__main__':
     if args.verbose:
         print('%s %s %s' % (args, args.catfile, args.directory))
     
-    random.seed(args.seed)
+    np.random.seed(args.seed)
 
     # obtain document vectors
     (docvectors, docids) = docs2vectors_tfidf(args.directory, args.num_words, args.verbose)
@@ -224,7 +209,7 @@ if __name__ == '__main__':
             if 1 - s[0:i].sum()/s.sum() < args.aerror / 100.0:
                 dim = i
                 break
-        docvectors = dot(U[:,:dim], diag(s[:dim]))
+        docvectors = np.dot(U[:,:dim], np.diag(s[:dim]))
         print('compressed %d dims into %d dims' % (U.shape[0], dim))
 
         #print [x for x in docvectors[1]]
@@ -232,7 +217,7 @@ if __name__ == '__main__':
             print([x for x in s])
     #TODO: compare to random indexing
     
-    (memberships, centroids) = random_kmeans_init2(docvectors, args.clusters)
+    (memberships, centroids) = random_kmeans_init(docvectors, args.clusters)
     print('initial centroids: \n %s' % centroids)
     print('initial memberships: \n %s' % memberships)
 
@@ -257,7 +242,7 @@ if __name__ == '__main__':
 
     if 'spectral' in args.method:
         ngmat = ng_matrix_epsilon(centroids,args.epsilon, binary=args.bneighbour)
-        degreemat = zeros(ngmat.shape)
+        degreemat = np.zeros(ngmat.shape)
         for (i,row) in enumerate(degreemat):
             degreemat[i][i] = sum(ngmat[i])
         laplacian = degreemat - ngmat
