@@ -14,7 +14,7 @@ import time
 from evaluate import Evaluator
 
 
-edist = lambda d, cs: np.sum((d -cs) ** 2, axis=1)
+edist = lambda d, cs: np.sum((d - cs) ** 2, axis=1)
 
 
 def ng_matrix_epsilon(itemvectors, epsilon, distance=edist, binary=False):
@@ -27,14 +27,14 @@ def ng_matrix_epsilon(itemvectors, epsilon, distance=edist, binary=False):
     """
     c = 0
     matrix = np.zeros((itemvectors.shape[0], itemvectors.shape[0]), float)
-    for (i,x) in enumerate(itemvectors):
+    for (i, x) in enumerate(itemvectors):
         matrix[i] = distance(itemvectors[i], itemvectors)
     matrix[matrix > epsilon] = 0.0
     if binary:
         matrix[matrix > 0] = 1.0
 
     c = np.sum(matrix > 0)
-    sys.stderr.write("ng_matrix_epsilon: number of edges = %s (%s)\n" % (c,  matrix.shape[0] * matrix.shape[1]))
+    sys.stderr.write("ng_matrix_epsilon: number of edges = %s (%s)\n" % (c, matrix.shape[0] * matrix.shape[1]))
     return matrix
 
 
@@ -46,7 +46,7 @@ def kmeans(itemvectors, initial, distance=edist, threshold=1.0E-6, iterations=10
         # renew memberships
         memberships = np.array([np.argmin(distance(d, centroids)) for d in itemvectors])
         objective = np.sum(np.min(distance(d, centroids)) for d in itemvectors)
-        
+
         print('iteration %d: %f' % (it, objective))
         if abs(objective - old_objective) < threshold:
             break
@@ -80,7 +80,7 @@ def random_kmeans_init(itemvectors, num_clusters):
     np.random.shuffle(memberships)
 
     centroids = renew_centroids(itemvectors, memberships, num_clusters)
-    return (memberships,centroids)
+    return (memberships, centroids)
 
 def random_kmeans_init2(itemvectors, num_clusters, distance=edist):
     """
@@ -115,9 +115,9 @@ def docs2vectors_tfidf(dr, vocsize, verbose=False):
     id2word = sorted(words.keys(), key=lambda x: df[x], reverse=True)[0:vocsize]
     word2id = {}
     mat = np.zeros((len(tf), len(id2word)), float)
-    for (i,c) in enumerate(id2word):
+    for (i, c) in enumerate(id2word):
         word2id[c] = i
-    for (i,row) in enumerate(mat):
+    for (i, row) in enumerate(mat):
         for w in [ x for x in tf[i][1].keys() if x in word2id ]:
             row[word2id[w]] = log(1.0 + tf[i][1][w]) / df[w]
     return (mat, docs)
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     args.method = dict(zip(args.method, args.method))
     if args.verbose:
         print('%s %s %s' % (args, args.catfile, args.directory))
-    
+
     np.random.seed(args.seed)
 
     # obtain document vectors
@@ -216,7 +216,7 @@ if __name__ == '__main__':
         if args.verbose:
             print([x for x in s])
     #TODO: compare to random indexing
-    
+
     (memberships, centroids) = random_kmeans_init(docvectors, args.clusters)
     print('initial centroids: \n %s' % centroids)
     print('initial memberships: \n %s' % memberships)
@@ -224,12 +224,12 @@ if __name__ == '__main__':
     print_evaluation(evaluate, docids, memberships)
 
     if 'kmeans' in args.method:
-        (memberships,centroids) = kmeans(docvectors, initial=centroids, threshold=args.precision, verbose=args.verbose)
+        (memberships, centroids) = kmeans(docvectors, initial=centroids, threshold=args.precision, verbose=args.verbose)
         if args.verbose:
             print(' result centroids: \n %s' % centroids)
         if args.output:
             ofile = open(args.output, 'w')
-            for (doc,cluster) in zip(docids,memberships):
+            for (doc, cluster) in zip(docids, memberships):
                 ofile.write('%s %s\n' % (doc, cluster))
             ofile.close()
         else:
@@ -241,20 +241,20 @@ if __name__ == '__main__':
     # use scipy.sparse.linalg.eigen
 
     if 'spectral' in args.method:
-        ngmat = ng_matrix_epsilon(centroids,args.epsilon, binary=args.bneighbour)
+        ngmat = ng_matrix_epsilon(centroids, args.epsilon, binary=args.bneighbour)
         degreemat = np.zeros(ngmat.shape)
-        for (i,row) in enumerate(degreemat):
+        for (i, row) in enumerate(degreemat):
             degreemat[i][i] = sum(ngmat[i])
         laplacian = degreemat - ngmat
         (evaluates, evecs) = scipy.linalg.eig(laplacian)
-        
+
         vectors = evecs[0:args.sclusters].transpose()
-        (mem,cen) = random_kmeans_init2(vectors, args.sclusters)
-        (mem,cen) = kmeans(vectors, initial=cen, threshold=args.precision, verbose=args.verbose)
+        (mem, cen) = random_kmeans_init2(vectors, args.sclusters)
+        (mem, cen) = kmeans(vectors, initial=cen, threshold=args.precision, verbose=args.verbose)
         memberships = [mem[x] for x in memberships]
         if args.output:
             ofile = open(args.output, 'w')
-            for (doc,cluster) in zip(docids,memberships):
+            for (doc, cluster) in zip(docids, memberships):
                 ofile.write('%s %s\n' % (doc, cluster))
             ofile.close()
         else:

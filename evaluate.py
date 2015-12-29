@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 
-import sys
-import os
 import optparse
 import re
 import math
+import codecs
 try:
     from functools import reduce
 except ImportError:
