@@ -4,13 +4,29 @@ import unittest
 from tempfile import mktemp, mkdtemp
 from six import StringIO
 import evaluate
+import clusterer
+import numpy as np
 
 class TestDocCluster(unittest.TestCase):
 
     def setUp(self):
         pass
+
     def test_doc2vectors(self):
         pass
+
+    def test_kmeans(self):
+        mem, cen = clusterer.kmeans(
+            np.array([[0.01, 0.5],
+                      [0.02, 0.5],
+                      [0.9, 0.1],
+                      [0.85, 0.2],
+                      [0.8, 0.1]]),
+            np.array([[0.0, 0.0],
+                      [1.0, 1.0]])
+            )
+        self.assertTrue(np.all(np.array([0, 0, 1, 1, 1]) == mem))
+
 
 class TestEvaluate(unittest.TestCase):
     
