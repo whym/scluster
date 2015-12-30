@@ -3,8 +3,7 @@
 import unittest
 from tempfile import mktemp, mkdtemp
 from six import StringIO
-import evaluate
-import clusterer
+from scluster import clusterer, evaluate
 import numpy as np
 
 class TestDocCluster(unittest.TestCase):
