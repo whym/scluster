@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='scluster',
-    version='0.0.2',
+    version='0.0.3',
     author='Yusuke Matsubara',
     author_email='whym@whym.org',
     description='an implementation of spectral clustering for text document collections',

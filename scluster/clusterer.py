@@ -21,7 +21,7 @@ def ng_matrix_epsilon(itemvectors, epsilon, distance=edist, binary=False):
     """
     Extract a neighborhood matrix from the given item vectors.
 
-    @param  distance: a function two vectors (x,y) to a double value
+    @param  distance: a function from a vector and a centroid matrix to a distance vector
     @param   epsilon: threshold that defines neighborhood
 
     """
@@ -72,26 +72,22 @@ def renew_centroids(itemvectors, memberships, num_clusters, verbose=False):
                 sys.stderr.write(' cluster %d is empty; not updating\n' % i)
     return centroids
 
-def random_kmeans_init(itemvectors, num_clusters):
+def initialize_random(itemvectors, num_clusters, method='assignment', distance=edist):
     """
-    for each item, assign a random label
-    """
-    memberships = [x * num_clusters // len(itemvectors) for x in xrange(0,len(itemvectors))]
-    np.random.shuffle(memberships)
 
-    centroids = renew_centroids(itemvectors, memberships, num_clusters)
-    return (memberships, centroids)
-
-def random_kmeans_init2(itemvectors, num_clusters, distance=edist):
+    @param  distance: a function from a vector and a centroid matrix to a distance vector
+    @param    method: 'assignment' or 'items'- 'assignment': for each item, assign a random label. 'items': choose random k items and let them be centroids, and assign memberships accordingly to other items
     """
-    choose random k items and let them be centroids,
-    and assign memberships accordingly to other items
-    """
-    centroids = itemvectors.copy()
-    np.random.shuffle(centroids)
-    centroids = centroids[0:num_clusters]
+    if method == 'assignment':
+        memberships = [x * num_clusters // len(itemvectors) for x in xrange(0,len(itemvectors))]
+        np.random.shuffle(memberships)
 
-    memberships = np.array([np.argmin(distance(d, centroids)) for d in itemvectors])
+        centroids = renew_centroids(itemvectors, memberships, num_clusters)
+    else:
+        centroids = itemvectors.copy()
+        np.random.shuffle(centroids)
+        centroids = centroids[0:num_clusters]
+        memberships = np.array([np.argmin(distance(d, centroids)) for d in itemvectors])
     return (memberships, centroids)
 
 def docs2vectors_tfidf(dr, vocsize, verbose=False):
@@ -148,6 +144,8 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-words', metavar='NUM_WORDS',
                         dest='num_words', type=int, default=5000,
                         help='number of words to extract')
+    parser.add_argument('--initialize', choices=['assignment', 'items'],
+                        default='assignment')
     parser.add_argument('-m', '--method', metavar='METHOD',
                         dest='method', type=str, default='svd,kmeans',
                         help="""clustering algorithms:
@@ -217,9 +215,10 @@ if __name__ == '__main__':
             print([x for x in s])
     #TODO: compare to random indexing
 
-    (memberships, centroids) = random_kmeans_init(docvectors, args.clusters)
-    print('initial centroids: \n %s' % centroids)
-    print('initial memberships: \n %s' % memberships)
+    (memberships, centroids) = initialize_random(docvectors, args.clusters, method=args.initialize)
+    if args.verbose:
+        print('initial centroids: \n %s' % centroids)
+        print('initial memberships: \n %s' % memberships)
 
     print_evaluation(evaluate, docids, memberships)
 
@@ -249,7 +248,7 @@ if __name__ == '__main__':
         (evaluates, evecs) = scipy.linalg.eig(laplacian)
 
         vectors = evecs[0:args.sclusters].transpose()
-        (mem, cen) = random_kmeans_init2(vectors, args.sclusters)
+        (mem, cen) = initialize_random(vectors, args.sclusters, method=args.initialize)
         (mem, cen) = kmeans(vectors, initial=cen, threshold=args.precision, verbose=args.verbose)
         memberships = [mem[x] for x in memberships]
         if args.output:
