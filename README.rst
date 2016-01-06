@@ -23,14 +23,15 @@ Requirements
 ==============================
 Following softwares are required.
 
-- Python 2 or 3
+- Python 2.7 or 3.4
 - Numpy
 - Scipy
 
 How to use
 ==============================
-1. Prepare documents as raw-text files, and put them in a directory, for example, 'reuters'.
-2. Prepare a category file. For example, 'cats.txt' may contain: ::
+1. Clone this repository.
+2. Prepare documents as raw-text files, and put them in a directory, for example, 'reuters'.
+3. Prepare a category file. For example, 'cats.txt' may contain: ::
 
      14833 palm-oil veg-oil
      14839 ship
@@ -38,7 +39,7 @@ How to use
    This means that the file '14833' has 'palm-oil' and 'veg-oil' as
    its categories, and '14839' has 'ship' as its category.
 
-3. Run: ``python scluster/clusterer.py cats.txt reusters/ -m kmeans``,
+4. Run: ``python scluster/clusterer.py cats.txt reusters/ -m kmeans``,
 
 Notes
 ==============================
