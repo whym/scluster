@@ -48,7 +48,7 @@ def kmeans(itemvectors, initial, distance=edist, threshold=1.0E-6, iterations=10
         objective = np.sum(np.min(distance(d, centroids)) for d in itemvectors)
 
         print('iteration %d: %f' % (it, objective))
-        if abs(objective - old_objective) < threshold:
+        if abs((objective - old_objective) / objective) < threshold:
             break
         old_objective = objective
 
