@@ -11,7 +11,7 @@ import scipy.linalg
 import numpy as np
 from math import log
 import time
-from evaluate import Evaluator
+from .evaluate import Evaluator
 
 
 edist = lambda d, cs: np.sum((d - cs) ** 2, axis=1)

@@ -8,4 +8,4 @@ install:
   - pip install -r requirements.txt
 before_install:
   - sudo apt-get update && sudo apt-get install -qq python-numpy python-scipy python3-numpy python3-scipy
-script: nosetests -v *.py
+script: nosetests -v
