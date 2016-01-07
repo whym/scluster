@@ -39,7 +39,7 @@ How to use
    This means that the file '14833' has 'palm-oil' and 'veg-oil' as
    its categories, and '14839' has 'ship' as its category.
 
-4. Run: ``python scluster/clusterer.py cats.txt reusters/ -m kmeans``,
+4. Run: ``python -m scluster.clusterer cats.txt reusters/ -m kmeans``,
 
 Notes
 ==============================
